@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendo - Facial Recognition Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="lib/react.js"></script>
+    <script src="lib/react-dom.js"></script>
+    <script src="lib/face-api.min.js"></script>
+    <script src="lib/firebase-app-compat.js"></script>
+    <script src="lib/firebase-firestore-compat.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Poppins', sans-serif; background: #f9fafb; }
+      html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+    (function() {
+      var e = React.createElement;
+      var S = React.useState, R = React.useRef, C = React.useCallback, E = React.useEffect;
+
+      var db = null;
+      var firebaseReady = false;
+      try {
+        firebase.initializeApp({
+          apiKey: "AIzaSyBuPcGUerdUjKJj2cV-okxycwrnPv_YGxs",
+          authDomain: "attendo-app-e2f10.firebaseapp.com",
+          projectId: "attendo-app-e2f10",
+          storageBucket: "attendo-app-e2f10.appspot.com",
+          messagingSenderId: "684869532976",
+          appId: "1:684869532976:web:3419a6a50bf72a_YGxs"
+        });
+        db = firebase.firestore();
+        firebaseReady = true;
+      } catch(ex) { console.error("Firebase init failed:", ex); }
+
+      /* ---- Style objects ---- */
+      var S_header = { position:'sticky', top:0, zIndex:50, background:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' };
+      var S_headerInner = { maxWidth:1200, margin:'0 auto', padding:'0 16px', display:'flex', justifyContent:'space-between', alignItems:'center', height:64 };
+      var S_logo = { fontSize:24, fontWeight:700, color:'#1f2937', cursor:'pointer' };
+      var S_logoA = { color:'#f97316' };
+      var S_nav = { display:'flex', gap:4 };
+      var S_navBtn = { padding:'8px 14px', borderRadius:8, fontWeight:600, fontSize:14, border:'none', cursor:'pointer', background:'#f3f4f6', color:'#4b5563', transition:'all 0.2s' };
+      var S_navBtnActive = { padding:'8px 14px', borderRadius:8, fontWeight:600, fontSize:14, border:'none', cursor:'pointer', background:'#0d9488', color:'#fff', boxShadow:'0 4px 12px rgba(13,148,136,0.3)' };
+
+      var S_home = { height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#0d9488', color:'#e5e7eb', textAlign:'center', padding:16 };
+      /* S_home h1 styles set inline */
+
+      var S_section = { minHeight:'100vh', padding:'96px 16px', display:'flex', alignItems:'center', justifyContent:'center' };
+      var S_sectionWhite = Object.assign({}, S_section, { background:'#fff' });
+      var S_sectionGray = Object.assign({}, S_section, { background:'#f9fafb' });
+      var S_container = { width:'100%', maxWidth:800 };
+      var S_title = { fontSize:30, fontWeight:700, textAlign:'center', color:'#0f766e', marginBottom:32 };
+      var S_titleOrange = { color:'#f97316' };
+      var S_card = { background:'#fff', padding:24, borderRadius:12, boxShadow:'0 2px 8px rgba(0,0,0,0.08)', border:'1px solid #e5e7eb', marginBottom:24 };
+      var S_cardGreen = Object.assign({}, S_card, { background:'#dcfce7', textAlign:'center' });
+      var S_cardGray = Object.assign({}, S_card, { background:'#f3f4f6', textAlign:'center' });
+      var S_bigNum = { fontSize:56, fontWeight:700 };
+      var S_label = { fontSize:20, fontWeight:700, marginBottom:8 };
+      var S_input = { width:'100%', padding:'12px 14px', borderRadius:8, border:'2px solid #e5e7eb', fontSize:16, fontFamily:'Poppins, sans-serif', marginBottom:12 };
+      var S_btnPrimary = { width:'100%', padding:'12px 16px', borderRadius:8, background:'#0d9488', color:'#fff', fontWeight:700, fontSize:16, border:'none', cursor:'pointer', marginTop:16 };
+      var S_btnOrange = { padding:'12px 32px', borderRadius:8, background:'#f97316', color:'#fff', fontWeight:700, fontSize:16, border:'none', cursor:'pointer' };
+      var S_btnDark = { padding:'12px 24px', borderRadius:8, background:'#1f2937', color:'#fff', fontWeight:700, fontSize:16, border:'none', cursor:'pointer' };
+      var S_btnRed = { padding:'12px 24px', borderRadius:8, background:'#dc2626', color:'#fff', fontWeight:700, fontSize:16, border:'none', cursor:'pointer' };
+      var S_btnGray = { padding:'12px 32px', borderRadius:8, background:'#e5e7eb', fontWeight:600, fontSize:16, border:'none', cursor:'pointer' };
+      var S_videoWrap = { position:'relative', width:'100%', aspectRatio:'16/9', borderRadius:12, background:'#e5e7eb', border:'1px solid #e5e7eb', overflow:'hidden' };
+      var S_video = { width:'100%', height:'100%', objectFit:'cover' };
+      var S_canvas = { position:'absolute', top:0, left:0, width:'100%', height:'100%' };
+      var S_statusBar = { position:'fixed', bottom:0, width:'100%', background:'#1f2937', color:'#fff', padding:12, textAlign:'center', fontWeight:600, fontSize:14 };
+      var S_grid2 = { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:32 };
+      var S_listItem = { background:'#fff', padding:12, borderRadius:8, marginBottom:8, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' };
+      var S_presentItem = { background:'#dcfce7', padding:12, borderRadius:8, marginBottom:8 };
+      var S_checkinBox = { background:'#f9fafb', padding:24, borderRadius:12, border:'1px solid #e5e7eb', marginTop:24 };
+      var S_listContainer = { maxHeight:384, overflowY:'auto' };
+      var S_verifyGrid = { display:'grid', gridTemplateColumns:'1fr', gap:32, alignItems:'center', maxWidth:1000, margin:'0 auto' };
+      var S_dangerZone = { marginTop:48, paddingTop:32, borderTop:'2px solid #fecaca', textAlign:'center' };
+      var S_overlay = { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 };
+      var S_modal = { background:'#fff', padding:32, borderRadius:16, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', textAlign:'center', width:'100%', maxWidth:400, margin:'0 16px' };
+      var S_flexRow = { display:'flex', gap:16, flexWrap:'wrap' };
+      var S_presentList = { listStyle:'disc', paddingLeft:20 };
+      var S_greenText = { color:'#16a34a' };
+      var S_redText = { color:'#dc2626' };
+
+      function App() {
+        var tabState = S("home");
+        var activeTab = tabState[0], setActiveTab = tabState[1];
+        var formState = S({ name:'', rollNumber:'', 'class':'' });
+        var studentForm = formState[0], setStudentForm = formState[1];
+        var msgState = S(firebaseReady ? 'Initializing...' : 'Firebase offline');
+        var statusMessage = msgState[0], setStatusMessage = msgState[1];
+        var reportState = S({ present:[], absent:[] });
+        var reportData = reportState[0], setReportData = reportState[1];
+        var filterState = S({ 'class':'', date: new Date().toISOString().slice(0,10) });
+        var filters = filterState[0], setFilters = filterState[1];
+        var sloganState = S('');
+        var slogan = sloganState[0], setSlogan = sloganState[1];
+        var checkinsState = S([]);
+        var recentCheckins = checkinsState[0], setRecentCheckins = checkinsState[1];
+        var modalState = S(false);
+        var showConfirmModal = modalState[0], setShowConfirmModal = modalState[1];
+        var dashState = S({ presentCount:0, totalCount:0, checkins:[] });
+        var dashboardData = dashState[0], setDashboardData = dashState[1];
+        var regVideoRef = R(null);
+        var verVideoRef = R(null);
+        var verCanvasRef = R(null);
+        var matcherState = S(null);
+        var faceMatcher = matcherState[0], setFaceMatcher = matcherState[1];
+        var modelState = S(false);
+        var modelsLoaded = modelState[0], setModelsLoaded = modelState[1];
+        var mutexRef = R({ locked:false });
+        var secRefs = R({});
+        var recognized = R(new Set());
+
+        var slogans = ["Attend to ascend.", "Each day you are in, you are closer to win.", "Step in daily, succeed greatly."];
+
+        E(function() {
+          setSlogan(slogans[0]);
+          var idx = 0;
+          var iv = setInterval(function() { idx = (idx+1) % slogans.length; setSlogan(slogans[idx]); }, 5000);
+          return function() { clearInterval(iv); };
+        }, []);
+
+        function loadDashboardData() {
+          if (!db) return;
+          var today = new Date().toISOString().slice(0,10);
+          db.collection("students").get().then(function(ss) {
+            var tc = ss.size;
+            return db.collection("attendance").where("date","==",today).get().then(function(as) {
+              var pr = {};
+              as.docs.forEach(function(d) { pr[d.data().rollNumber] = 1; });
+              var ci = as.docs.map(function(d) { return d.data(); })
+                .sort(function(a,b) { return (a['class']+a.name).localeCompare(b['class']+b.name); });
+              setDashboardData({ presentCount:Object.keys(pr).length, totalCount:tc, checkins:ci });
+            });
+          }).catch(function(err) { console.error(err); });
+        }
+
+        E(function() {
+          var obs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+              if (en.isIntersecting) {
+                var id = en.target.id;
+                setActiveTab(id);
+                if (id === 'dashboard') loadDashboardData();
+              }
+            });
+          }, { rootMargin:'-40% 0px -60% 0px' });
+          Object.values(secRefs.current).forEach(function(r) { if(r) obs.observe(r); });
+          return function() { Object.values(secRefs.current).forEach(function(r) { if(r) obs.unobserve(r); }); };
+        }, []);
+
+        function scrollTo(id) {
+          var el = secRefs.current[id];
+          if (el) el.scrollIntoView({ behavior:'smooth' });
+        }
+
+        E(function() {
+          function loadModels() {
+            if (typeof faceapi === 'undefined') { setTimeout(loadModels, 500); return; }
+            var URL = 'models';
+            setStatusMessage('Loading AI models...');
+            Promise.all([
+              faceapi.nets.tinyFaceDetector.loadFromUri(URL),
+              faceapi.nets.faceLandmark68Net.loadFromUri(URL),
+              faceapi.nets.faceRecognitionNet.loadFromUri(URL)
+            ]).then(function() { setModelsLoaded(true); setStatusMessage(firebaseReady?'AI loaded.':'AI loaded, Firebase offline'); })
+              .catch(function(err) { console.error(err); setStatusMessage('AI model error.'); });
+          }
+          loadModels();
+        }, []);
+
+        function loadTrainingData() {
+          if (!db) { setStatusMessage("Firebase not available."); return Promise.resolve(); }
+          setStatusMessage('Loading student data...');
+          return db.collection("students").get().then(function(snap) {
+            var ld = snap.docs.map(function(doc) {
+              var d = doc.data();
+              if (d.descriptor && d.rollNumber) {
+                return new faceapi.LabeledFaceDescriptors(d.rollNumber, [new Float32Array(Object.values(d.descriptor))]);
+              }
+              return null;
+            }).filter(Boolean);
+            setFaceMatcher(ld.length ? new faceapi.FaceMatcher(ld, 0.55) : null);
+            setStatusMessage("Ready.");
+          }).catch(function(err) { console.error(err); setStatusMessage("Data load error."); });
+        }
+
+        E(function() { if (modelsLoaded) loadTrainingData(); }, [modelsLoaded]);
+
+        function startCam(vid) {
+          if (!vid || vid.srcObject) return Promise.resolve();
+          return navigator.mediaDevices.getUserMedia({video:true}).then(function(s) {
+            vid.srcObject = s;
+            return new Promise(function(r) { vid.onloadedmetadata = r; });
+          }).catch(function() { setStatusMessage('Camera access denied.'); });
+        }
+
+        function markAttendance(roll) {
+          if (!db) return Promise.resolve();
+          var today = new Date().toISOString().slice(0,10);
+          var key = roll + '-' + today;
+          if (recognized.current.has(key)) return;
+          recognized.current.add(key);
+          return db.collection("students").where("rollNumber","==",roll).get().then(function(snap) {
+            if (!snap.empty) {
+              var st = snap.docs[0].data();
+              var rec = { rollNumber:st.rollNumber, name:st.name, 'class':st['class'], date:today, timestamp:firebase.firestore.Timestamp.now() };
+              return db.collection("attendance").add(rec).then(function() {
+                setStatusMessage('Marked: ' + st.name);
+                setRecentCheckins(function(p) { return [rec].concat(p).slice(0,10); });
+              });
+            }
+          }).catch(function(err) { console.error(err); recognized.current.delete(key); });
+        }
+
+        E(function() {
+          var iv;
+          if (activeTab === 'verify' && modelsLoaded && verVideoRef.current) {
+            startCam(verVideoRef.current);
+            iv = setInterval(function() {
+              var v = verVideoRef.current, c = verCanvasRef.current;
+              if (!v||!c||v.paused||v.ended||typeof faceapi==='undefined') return;
+              var ds = { width:v.clientWidth, height:v.clientHeight };
+              if (!ds.width) return;
+              faceapi.matchDimensions(c, ds);
+              faceapi.detectAllFaces(v, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors().then(function(det) {
+                var rd = faceapi.resizeResults(det, ds);
+                c.getContext('2d').clearRect(0,0,c.width,c.height);
+                if (faceMatcher) {
+                  rd.forEach(function(d) {
+                    var r = faceMatcher.findBestMatch(d.descriptor);
+                    new faceapi.draw.DrawBox(d.detection.box, { label:r.toString() }).draw(c);
+                    if (r.label !== 'unknown') markAttendance(r.label);
+                  });
+                }
+              }).catch(function(){});
+            }, 700);
+          } else { recognized.current.clear(); setRecentCheckins([]); }
+          return function() { if(iv) clearInterval(iv); };
+        }, [activeTab, modelsLoaded, faceMatcher]);
+
+        E(function() { if (activeTab==='register'&&regVideoRef.current) startCam(regVideoRef.current); }, [activeTab]);
+
+        function handleRegister() {
+          if (mutexRef.current.locked) return;
+          mutexRef.current.locked = true;
+          var n = studentForm.name, rn = studentForm.rollNumber, cl = studentForm['class'];
+          if (!n||!rn||!cl) { setStatusMessage("Fill all fields."); mutexRef.current.locked=false; return; }
+          if (!db) { setStatusMessage("Firebase not available."); mutexRef.current.locked=false; return; }
+          setStatusMessage('Detecting face...');
+          if (!regVideoRef.current) { mutexRef.current.locked=false; return; }
+          db.collection("students").where("rollNumber","==",rn).get().then(function(qs) {
+            if (!qs.empty) { setStatusMessage("Roll number exists."); mutexRef.current.locked=false; return; }
+            return faceapi.detectSingleFace(regVideoRef.current, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+          }).then(function(det) {
+            if (!det||!det.descriptor) { setStatusMessage("No face detected."); mutexRef.current.locked=false; return; }
+            return db.collection("students").add({ name:n, rollNumber:rn, 'class':cl, descriptor:Object.assign({},det.descriptor), registeredAt:firebase.firestore.Timestamp.now() });
+          }).then(function() {
+            setStatusMessage('Student ' + n + ' registered!');
+            setStudentForm({ name:'', rollNumber:'', 'class':'' });
+            loadTrainingData();
+          }).catch(function(err) { console.error(err); setStatusMessage("Registration failed."); })
+            .finally(function() { mutexRef.current.locked=false; setTimeout(function(){setStatusMessage("Ready.");},2000); });
+        }
+
+        function handleManualVerify() {
+          if (!verVideoRef.current||!faceMatcher) { setStatusMessage("Not ready."); return; }
+          setStatusMessage("Verifying...");
+          faceapi.detectSingleFace(verVideoRef.current, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor().then(function(det) {
+            if (!det) { setStatusMessage("No face detected."); return; }
+            var r = faceMatcher.findBestMatch(det.descriptor);
+            if (r.label !== "unknown") markAttendance(r.label);
+            else setStatusMessage("Not recognized.");
+          }).catch(function(err) { console.error(err); setStatusMessage("Verify failed."); })
+            .finally(function(){ setTimeout(function(){setStatusMessage("Ready.");},2000); });
+        }
+
+        function genReport() {
+          var cl = filters['class'], dt = filters.date;
+          if (!cl||!dt) { alert("Enter class and date."); return; }
+          if (!db) { setStatusMessage("Firebase not available."); return; }
+          db.collection("students").where("class","==",cl).get().then(function(ss) {
+            var all = ss.docs.map(function(d){return d.data();});
+            return db.collection("attendance").where("class","==",cl).where("date","==",dt).get().then(function(as) {
+              var pr = {};
+              as.docs.forEach(function(d){pr[d.data().rollNumber]=1;});
+              setReportData({ present:all.filter(function(s){return pr[s.rollNumber];}), absent:all.filter(function(s){return !pr[s.rollNumber];}) });
+            });
+          }).catch(function(err){console.error(err);});
+        }
+
+        function clearAll() {
+          if (!db) { setStatusMessage("Firebase not available."); return; }
+          setStatusMessage("Clearing...");
+          var chain = Promise.resolve();
+          ["students","attendance"].forEach(function(col) {
+            chain = chain.then(function() {
+              return db.collection(col).get().then(function(snap) {
+                var dc = Promise.resolve();
+                snap.docs.forEach(function(d){dc=dc.then(function(){return d.ref.delete();});});
+                return dc;
+              });
+            });
+          });
+          chain.then(function(){ setFaceMatcher(null); setReportData({present:[],absent:[]}); setRecentCheckins([]); setStatusMessage("Cleared."); })
+            .catch(function(err){console.error(err);setStatusMessage("Failed.");})
+            .finally(function(){ setShowConfirmModal(false); setTimeout(function(){setStatusMessage("Ready.");},2000); });
+        }
+
+        function fmtSlogan(t) {
+          var kw = ['Attend','ascend','in','win','daily','greatly'];
+          var re = new RegExp('('+kw.join('|')+')','gi');
+          return t.split(re).map(function(p,i) {
+            if (kw.some(function(k){return k.toLowerCase()===p.toLowerCase();}))
+              return e('span',{key:i,style:{color:'#fb923c',fontWeight:700}},p);
+            return p;
+          });
+        }
+
+        /* ---- Render ---- */
+        var tabs = ["home","dashboard","register","verify","report"];
+        var navBtns = tabs.map(function(t) {
+          var isActive = activeTab === t;
+          return e('button', { key:t, onClick:function(){scrollTo(t);},
+            style: isActive ? S_navBtnActive : S_navBtn },
+            t.charAt(0).toUpperCase()+t.slice(1));
+        });
+
+        return e('div', null,
+          /* HEADER */
+          e('header', { style:S_header },
+            e('div', { style:S_headerInner },
+              e('div', null, e('span', { style:S_logo }, e('span',{style:S_logoA},'A'), 'ttendo') ),
+              e('div', { style:S_nav }, navBtns)
+            )
+          ),
+
+          /* HOME */
+          e('section', { id:'home', ref:function(el){secRefs.current.home=el;}, style:S_home },
+            e('h1', { style:{fontSize:'2.5rem',fontWeight:600} }, fmtSlogan(slogan))
+          ),
+
+          /* DASHBOARD */
+          e('section', { id:'dashboard', ref:function(el){secRefs.current.dashboard=el;}, style:S_sectionWhite },
+            e('div', { style:S_container },
+              e('h2', { style:S_title }, "Today's ", e('span',{style:S_titleOrange},'Dashboard')),
+              e('div', { style:S_grid2 },
+                e('div', { style:S_cardGreen },
+                  e('p', { style:Object.assign({},S_label,{color:'#166534'}) }, 'Present'),
+                  e('p', { style:Object.assign({},S_bigNum,{color:'#16a34a'}) }, dashboardData.presentCount)
+                ),
+                e('div', { style:S_cardGray },
+                  e('p', { style:Object.assign({},S_label,{color:'#1f2937'}) }, 'Total Registered'),
+                  e('p', { style:Object.assign({},S_bigNum,{color:'#4b5563'}) }, dashboardData.totalCount)
+                )
+              ),
+              e('div', { style:S_checkinBox },
+                e('h3', { style:Object.assign({},S_label,{color:'#0f766e',textAlign:'center',marginBottom:16}) }, "Today's Check-ins"),
+                e('div', { style:S_listContainer },
+                  dashboardData.checkins.length===0 && e('p',{style:{color:'#6b7280',textAlign:'center',paddingTop:40}},'No check-ins yet.'),
+                  dashboardData.checkins.map(function(s,i) {
+                    return e('div',{key:i,style:S_listItem}, s.name,' (',s.rollNumber,') - Class: ',s['class']);
+                  })
+                )
+              )
+            )
+          ),
+
+          /* REGISTER */
+          e('section', { id:'register', ref:function(el){secRefs.current.register=el;}, style:S_sectionGray },
+            e('div', { style:S_container },
+              e('h2', { style:S_title }, 'Register New ', e('span',{style:S_titleOrange},'Student')),
+              e('div', { style:S_grid2 },
+                e('div', { style:S_card },
+                  e('h3', { style:{fontWeight:600,fontSize:20,marginBottom:16} }, 'Student Details'),
+                  e('input', { type:'text', placeholder:'Full Name', value:studentForm.name,
+                    onChange:function(ev){setStudentForm(function(f){return Object.assign({},f,{name:ev.target.value});});},
+                    style:S_input }),
+                  e('input', { type:'text', placeholder:'Roll Number', value:studentForm.rollNumber,
+                    onChange:function(ev){setStudentForm(function(f){return Object.assign({},f,{rollNumber:ev.target.value});});},
+                    style:S_input }),
+                  e('input', { type:'text', placeholder:'Class (e.g., 10A)', value:studentForm['class'],
+                    onChange:function(ev){setStudentForm(function(f){return Object.assign({},f,{'class':ev.target.value});});},
+                    style:S_input })
+                ),
+                e('div', { style:Object.assign({},S_card,{textAlign:'center'}) },
+                  e('h3', { style:{fontWeight:600,fontSize:20,marginBottom:16} }, 'Face Capture'),
+                  e('video', { ref:regVideoRef, autoPlay:true, muted:true, playsInline:true, style:S_video }),
+                  e('button', { onClick:handleRegister, style:S_btnPrimary }, 'Register Student')
+                )
+              )
+            )
+          ),
+
+          /* VERIFY */
+          e('section', { id:'verify', ref:function(el){secRefs.current.verify=el;}, style:S_sectionWhite },
+            e('div', { style:S_verifyGrid },
+              e('div', { style:{textAlign:'center'} },
+                e('h2', { style:{fontSize:30,fontWeight:700,color:'#0f766e',marginBottom:24} }, 'Mark ', e('span',{style:S_titleOrange},'Attendance')),
+                e('div', { style:S_videoWrap },
+                  e('video', { ref:verVideoRef, autoPlay:true, muted:true, playsInline:true, style:S_video }),
+                  e('canvas', { ref:verCanvasRef, style:S_canvas })
+                ),
+                e('button', { onClick:handleManualVerify, style:Object.assign({},S_btnOrange,{marginTop:16}) }, 'Manual Verify')
+              ),
+              e('div', { style:Object.assign({},S_card,{maxHeight:400,display:'flex',flexDirection:'column',marginTop:16}) },
+                e('h3', { style:Object.assign({},S_label,{color:'#0f766e',textAlign:'center',marginBottom:16}) }, 'Recent Check-ins'),
+                e('div', { style:Object.assign({},S_listContainer,{flexGrow:1}) },
+                  recentCheckins.length===0 && e('p',{style:{color:'#6b7280',textAlign:'center',paddingTop:40}},'Waiting for students...'),
+                  recentCheckins.map(function(s,i) {
+                    return e('div',{key:i,style:S_presentItem}, s.name,' (',s.rollNumber,')');
+                  })
+                )
+              )
+            )
+          ),
+
+          /* REPORT */
+          e('section', { id:'report', ref:function(el){secRefs.current.report=el;}, style:S_sectionGray },
+            e('div', { style:S_container },
+              e('h2', { style:S_title }, 'Attendance ', e('span',{style:S_titleOrange},'Report')),
+              e('div', { style:S_card },
+                e('div', { style:S_flexRow },
+                  e('input', { type:'text', placeholder:'Enter Class (e.g., 10A)', value:filters['class'],
+                    onChange:function(ev){setFilters(function(f){return Object.assign({},f,{'class':ev.target.value});});},
+                    style:S_input }),
+                  e('input', { type:'date', value:filters.date,
+                    onChange:function(ev){setFilters(function(f){return Object.assign({},f,{date:ev.target.value});});},
+                    style:S_input }),
+                  e('button', { onClick:genReport, style:S_btnDark }, 'Generate')
+                )
+              ),
+              (reportData.present.length>0 || reportData.absent.length>0) &&
+                e('div', { style:S_grid2 },
+                  e('div', { style:S_card },
+                    e('h3', { style:Object.assign({},S_label,S_greenText) }, 'Present (',reportData.present.length,')'),
+                    e('ul', { style:S_presentList },
+                      reportData.present.map(function(s,i){return e('li',{key:i},s.name,' (',s.rollNumber,')');})
+                    )
+                  ),
+                  e('div', { style:S_card },
+                    e('h3', { style:Object.assign({},S_label,S_redText) }, 'Absent (',reportData.absent.length,')'),
+                    e('ul', { style:S_presentList },
+                      reportData.absent.map(function(s,i){return e('li',{key:i},s.name,' (',s.rollNumber,')');})
+                    )
+                  )
+                ),
+              e('div', { style:S_dangerZone },
+                e('h3', { style:{fontSize:20,fontWeight:700,color:'#b91c1c',marginBottom:16} }, 'Danger Zone'),
+                e('button', { onClick:function(){setShowConfirmModal(true);}, style:S_btnRed }, 'Clear All Data')
+              )
+            )
+          ),
+
+          /* MODAL */
+          showConfirmModal && e('div', { style:S_overlay },
+            e('div', { style:S_modal },
+              e('h3', { style:{fontSize:24,fontWeight:700,marginBottom:16} }, 'Are You Sure?'),
+              e('p', { style:{color:'#4b5563',marginBottom:32} }, 'This will permanently delete all student and attendance records.'),
+              e('div', { style:{display:'flex',justifyContent:'center',gap:16} },
+                e('button', { onClick:function(){setShowConfirmModal(false);}, style:S_btnGray }, 'Cancel'),
+                e('button', { onClick:clearAll, style:S_btnRed }, 'Confirm & Delete')
+              )
+            )
+          ),
+
+          /* STATUS BAR */
+          e('div', { style:S_statusBar }, 'Status: ', statusMessage)
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+    })();
+    </script>
+</body>
+</html>
